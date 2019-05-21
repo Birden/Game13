@@ -13,21 +13,21 @@ namespace Game13
     
     public partial class Form1 : Form
     {
-        const int MIN_X = 5, MAX_X = 10;
-        const int MIN_Y = 5, MAX_Y = 10;
-        const int MAX_NUMBER = 13;
-        private int sizeX;
-        private int sizeY;
-        private int cell_size = 50;
+        const int MIN_SIZE = 3, MAX_SIZE = 16;
+        const int MAX_NUMBER = 12;
+        private int map_size, cell_size, score, game_size = 12;
         private int[,] map, map_copy;
         private int currentMaxNumber;
         private int currentMinNumber;
         private int numberRange = 8;
+        private bool gameOver;
+
         Random rnd = new Random();
         Bitmap bmp = new Bitmap(500,500);
         Graphics gr;
         Pen pen = new Pen(Color.Black);
         Font font = new Font(DefaultFont, FontStyle.Bold);
+
         // 1 - Aquamarine, 2 - Azure, 3 - xx, 4 - Aqua
         //  
         Brush[] brushes = {Brushes.Gray, Brushes.Azure, Brushes.Bisque, Brushes.Aquamarine,
@@ -37,34 +37,33 @@ namespace Game13
         public Form1()
         {
             InitializeComponent();
-            GameStart(8, 8);
+            GameStart(game_size);
         }
         public int GetCell(int x, int y)
         {
             int cell = 0;
-            if (x >= 0 && x < sizeX && y >= 0 && y < sizeY)
+            if (x >= 0 && x < map_size && y >= 0 && y < map_size)
                 cell = map[x, y];
             return cell;
         }
         public void SetCell(int x,int y, int cell)
         {
-            if (x >= 0 && x < sizeX && y >= 0 && y < sizeY)
+            if (x >= 0 && x < map_size && y >= 0 && y < map_size)
                 map[x, y] = cell;
         }
-        public void GameStart(int sx, int sy)
+        public void GameStart(int size)
         {
             // Define size of map
-            sx = sx < MIN_X ? MIN_X : sx;
-            sx = sx > MAX_X ? MAX_X : sx;
-            sy = sy < MIN_Y ? MIN_Y : sy;
-            sy = sy > MAX_Y ? MAX_Y : sy;
-            sizeX = sx;
-            sizeY = sy;
-            map = new int[sizeX, sizeY];
-            map_copy = new int[sizeX, sizeY];
+            size = size < MIN_SIZE ? MIN_SIZE : size;
+            size = size > MAX_SIZE ? MAX_SIZE : size;
+            map_size = size;
+            cell_size = bmp.Width / size;
+            map = new int[map_size, map_size];
+            map_copy = new int[map_size, map_size];
             currentMaxNumber = 6;
             currentMinNumber = 1;
-            
+            score = 0;
+            gameOver = false;
             gr = Graphics.FromImage(bmp);
             GameFillMap();
             GameDrawMap();
@@ -85,9 +84,9 @@ namespace Game13
         public void GameFillMap()
         {
             
-            for (int x = 0; x < sizeX; x++)
+            for (int x = 0; x < map_size; x++)
             {
-                for (int y = 0; y < sizeY; y++)
+                for (int y = 0; y < map_size; y++)
                 {
                     SetCell(x,y,GetRandom());
                 }
@@ -96,9 +95,9 @@ namespace Game13
         public void GameDrawMap()
         {
             gr.Clear(Color.Gray);
-            for (int x = 0; x < sizeX; x++)
+            for (int x = 0; x < map_size; x++)
             {
-                for (int y = 0; y < sizeY; y++)
+                for (int y = 0; y < map_size; y++)
                 {
                     int c = GetCell(x, y);
                     //gr.DrawRectangle(pen, x * cell_size, y * cell_size, cell_size, cell_size);
@@ -107,7 +106,16 @@ namespace Game13
                 }
             }
             pictureBox1.Image = bmp;
-            label1.Text = "Min:" + currentMinNumber.ToString() + " Max:" + currentMaxNumber.ToString();
+            String str = gameOver ? "Game over (" + score + ")" : "Score: " + score.ToString();
+            label1.Text = str;
+        }
+        public bool isGameOver()
+        {
+            for (int x = 0; x < map_size; x++)
+                for (int y = 0; y < map_size; y++)
+                    if (FindAround(x, y) != 0)
+                        return false;
+            return true;
         }
         //      Поиск подобных клеток
         //      вокруг указанной (x,y)
@@ -117,7 +125,7 @@ namespace Game13
         //      бит 2: есть сверху
         //      бит 3: есть снизу
         //
-        public int FoundAround(int x, int y)
+        public int FindAround(int x, int y)
         {
             int res = 0;
             int c = GetCell(x, y);
@@ -139,17 +147,16 @@ namespace Game13
             int c = GetCell(x, y);                  // Значение тек. клетки
             if (c == 0)
                 return;
-            int res = FoundAround(x, y);            // ищем, есть ли такие же вокруг
+            int res = FindAround(x, y);            // ищем, есть ли такие же вокруг
             if (res != 0)
             {
-                if (c < MAX_NUMBER)
-                {
-                    SetCell(x, y, c + 1);
-                    if (currentMaxNumber < (c + 1))
-                        currentMaxNumber++;
-                    if ((currentMaxNumber - currentMinNumber) > numberRange)
-                        currentMinNumber++;
-                }
+                score += c;
+                SetCell(x, y, ++c);
+
+                if (currentMaxNumber < c && currentMaxNumber < MAX_NUMBER)
+                    currentMaxNumber++;
+                if ((currentMaxNumber - currentMinNumber) > numberRange)
+                    currentMinNumber++;
             }
             if ((res & 1) != 0)                     // есть слева:
             {
@@ -171,14 +178,16 @@ namespace Game13
                 DisposeCells(x, y + 1);
                 SetCell(x, y + 1, 0);
             }
+            if (c > MAX_NUMBER)
+                SetCell(x, y, --c);
         }
         //      Сохранение копии карты
         //
         public void StoreMap()
         {
-            for (int x = 0; x < sizeX; x++) 
+            for (int x = 0; x < map_size; x++) 
             {
-                for (int y = 0; y < sizeY; y++)
+                for (int y = 0; y < map_size; y++)
                     map_copy[x, y] = map[x, y];
             }
         }
@@ -188,9 +197,9 @@ namespace Game13
         {
             if (map_copy[0, 0] == 0)
                 return;
-            for (int x = 0; x < sizeX; x++)
+            for (int x = 0; x < map_size; x++)
             {
-                for (int y = 0; y < sizeY; y++)
+                for (int y = 0; y < map_size; y++)
                     map[x, y] = map_copy[x, y];
             }
         }
@@ -199,14 +208,15 @@ namespace Game13
         private void pictureBox1_Click(object sender, EventArgs e)
         {
             MouseEventArgs me = (MouseEventArgs)e;
-            int pressX = me.X < cell_size * sizeX ? me.X / cell_size : sizeX + 1;           // Ограничим координаты
-            int pressY = me.Y < cell_size * sizeY ? me.Y / cell_size : sizeY + 1;
+            int pressX = me.X < cell_size * map_size ? me.X / cell_size : map_size;           // Ограничим координаты
+            int pressY = me.Y < cell_size * map_size ? me.Y / cell_size : map_size;
 
-            if (pressX <= sizeX && pressY <= sizeY)                                         // Клик был в поле
+            if (pressX < map_size && pressY < map_size && !gameOver)                                      // Клик был в поле
             {
                 StoreMap();
                 DisposeCells(pressX, pressY);                                               // - обработаем клетку и прилегание
                 GameDeleteBlank();                                                          // - удалим пустые места
+                gameOver = isGameOver();
                 GameDrawMap();                                                              // - отрисуем заново карту
             }
         }
@@ -229,9 +239,9 @@ namespace Game13
         //
         public void GameDeleteBlank()
         {
-            for (int x = 0; x < sizeX; x++) 
+            for (int x = 0; x < map_size; x++) 
             {
-                for (int y = 0; y < sizeY; y++)
+                for (int y = 0; y < map_size; y++)
                 {
                     if (GetCell(x,y) == 0)
                         Shift(x, y);
@@ -240,7 +250,7 @@ namespace Game13
         }
         private void bNew_Click(object sender, EventArgs e)
         {
-            GameStart(8,8);
+            GameStart(game_size);
         }
     }
 
